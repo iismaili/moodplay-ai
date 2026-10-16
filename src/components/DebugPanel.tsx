@@ -27,7 +27,7 @@ export function DebugPanel({ classification, output, perf, delegate }: DebugPane
           <p>Anlık ipucu: {classification.expression}</p>
           <p>Gerekçe: {classification.reason}</p>
           <p>
-            Skorlar — gülümseme {classification.scores.happy.toFixed(2)}, kaş {classification.scores.browFurrow.toFixed(2)}, şaşkın{' '}
+            Skorlar — gülümseme {classification.scores.happy.toFixed(2)}, sinirli {classification.scores.browFurrow.toFixed(2)}, tiksinti {classification.scores.disgust.toFixed(2)}, üzgün {classification.scores.sad.toFixed(2)}, şaşkın{' '}
             {classification.scores.surprised.toFixed(2)}
           </p>
           <ul className="max-h-40 overflow-auto">

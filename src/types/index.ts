@@ -1,6 +1,8 @@
 export const EXPRESSION_IDS = [
   'happy',
   'brow_furrow',
+  'disgust',
+  'sad',
   'surprised',
   'neutral',
   'unknown',
@@ -9,7 +11,14 @@ export const EXPRESSION_IDS = [
 
 export type ExpressionId = (typeof EXPRESSION_IDS)[number];
 
-export const MUSICAL_EXPRESSION_IDS = ['happy', 'brow_furrow', 'surprised', 'neutral'] as const;
+export const MUSICAL_EXPRESSION_IDS = [
+  'happy',
+  'brow_furrow',
+  'disgust',
+  'sad',
+  'surprised',
+  'neutral',
+] as const;
 
 export type MusicalExpression = (typeof MUSICAL_EXPRESSION_IDS)[number];
 
@@ -30,6 +39,8 @@ export interface BlendshapeMap {
 export interface CategoryScores {
   happy: number;
   browFurrow: number;
+  disgust: number;
+  sad: number;
   surprised: number;
 }
 
@@ -50,6 +61,8 @@ export interface ClassificationFrame {
 export interface ClassifierThresholds {
   happyMin: number;
   browFurrowMin: number;
+  disgustMin: number;
+  sadMin: number;
   surprisedMin: number;
   neutralMax: number;
   minMargin: number;
@@ -81,7 +94,7 @@ export interface MusicTrack {
 export type MusicSelectionMode = 'sequential' | 'shuffle';
 
 export interface RuntimeSettings {
-  version: 1;
+  version: 6;
   thresholds: ClassifierThresholds;
   stabilizer: StabilizerConfig;
   volume: number;

@@ -1,7 +1,14 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { EXPRESSION_PRESENTATION } from '../config/expressions.ts';
 import { exportSettings, importSettingsJson } from '../config/runtimeSettings.ts';
-import { EXPRESSION_IDS, MUSICAL_EXPRESSION_IDS, type MusicalExpression, type RuntimeSettings } from '../types/index.ts';
+import { deleteAudioFile } from '../services/audioStorage.ts';
+import {
+  EXPRESSION_IDS,
+  MUSICAL_EXPRESSION_IDS,
+  type MusicTrack,
+  type MusicalExpression,
+  type RuntimeSettings,
+} from '../types/index.ts';
 
 interface SettingsPanelProps {
   settings: RuntimeSettings;
@@ -28,6 +35,35 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const [newTrackEmotion, setNewTrackEmotion] = useState<MusicalExpression>('happy');
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualSrc, setManualSrc] = useState('');
+
+  const removeTrack = (trackId: string) => {
+    void deleteAudioFile(trackId);
+    onChange((current) => ({
+      ...current,
+      tracks: current.tracks.filter((item) => item.id !== trackId),
+    }));
+  };
+
+  const handleAddFileForEmotion = (file: File, targetEmotion: MusicalExpression) => {
+    const cleanTitle = file.name.replace(/\.[^/.]+$/, '').trim() || 'Yeni Ses';
+    const newId = `custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newTrack: MusicTrack = {
+      id: newId,
+      title: cleanTitle,
+      src: `/user-audio/${file.name}`,
+      expression: targetEmotion,
+      license: 'Kullanıcı sesi',
+    };
+    onChange((current) => ({
+      ...current,
+      tracks: [...current.tracks, newTrack],
+    }));
+    onPreview(newId, file);
+    onNotice(`"${file.name}" ${EXPRESSION_PRESENTATION[targetEmotion].label} için eklendi.`);
+  };
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -96,93 +132,178 @@ export function SettingsPanel({
         </Section>
 
         <Section title="Müzikler">
-          {settings.tracks.map((track) => (
-            <div className="grid gap-3 rounded-2xl border border-white/10 p-3 md:grid-cols-2" key={track.id}>
+          <div className="rounded-2xl border border-sky-400/20 bg-sky-950/20 p-4">
+            <h3 className="text-base font-semibold text-sky-200">Duyguya Göre Yeni Ses / Müzik Ekle</h3>
+            <p className="mt-1 text-sm text-slate-300">
+              Bir duygu seçin ve o duygu belirdiğinde rastgele çalması için bilgisayarınızdan ses dosyası ekleyin veya yol yazın.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm text-slate-300">
-                Başlık
-                <input
-                  className="min-h-11 rounded-xl border border-white/10 bg-slate-950 px-3 text-white"
-                  onChange={(event) => updateTrack(onChange, track.id, { title: event.target.value })}
-                  value={track.title}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-slate-300">
-                Dosya yolu
-                <input
-                  className="min-h-11 rounded-xl border border-white/10 bg-slate-950 px-3 text-white"
-                  onChange={(event) => updateTrack(onChange, track.id, { src: event.target.value })}
-                  value={track.src}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-slate-300">
-                İfade
+                Hedef Duygu
                 <select
                   className="min-h-11 rounded-xl border border-white/10 bg-slate-950 px-3 text-white"
-                  onChange={(event) =>
-                    updateTrack(onChange, track.id, { expression: event.target.value as MusicalExpression })
-                  }
-                  value={track.expression}
+                  onChange={(e) => setNewTrackEmotion(e.target.value as MusicalExpression)}
+                  value={newTrackEmotion}
                 >
-                  {MUSICAL_EXPRESSION_IDS.map((expression) => (
-                    <option key={expression} value={expression}>
-                      {EXPRESSION_PRESENTATION[expression].label}
+                  {MUSICAL_EXPRESSION_IDS.map((exp) => (
+                    <option key={exp} value={exp}>
+                      {EXPRESSION_PRESENTATION[exp].emoji} {EXPRESSION_PRESENTATION[exp].label}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-sm text-slate-300">
-                Oturumluk dosya
+              <div className="flex flex-col gap-1 text-sm text-slate-300">
+                Ses Dosyası Yükle
+                <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 text-center text-sm font-medium text-sky-200 hover:bg-sky-500/20 transition-colors">
+                  <span>Bilgisayardan Dosya Seç (.mp3, .wav)</span>
+                  <input
+                    accept="audio/*"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        handleAddFileForEmotion(file, newTrackEmotion);
+                        event.target.value = '';
+                      }
+                    }}
+                    type="file"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-3 pt-3 border-t border-white/5">
+              <label className="flex-1 min-w-[140px] flex flex-col gap-1 text-xs text-slate-400">
+                Alternatif: Parça Başlığı
                 <input
-                  accept="audio/*"
-                  className="text-sm"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) onPreview(track.id, file);
-                  }}
-                  type="file"
+                  className="min-h-10 rounded-xl border border-white/10 bg-slate-950 px-3 text-sm text-white"
+                  onChange={(e) => setManualTitle(e.target.value)}
+                  placeholder="Örn: Yeni Parça"
+                  value={manualTitle}
+                />
+              </label>
+              <label className="flex-1 min-w-[180px] flex flex-col gap-1 text-xs text-slate-400">
+                Dosya Yolu
+                <input
+                  className="min-h-10 rounded-xl border border-white/10 bg-slate-950 px-3 text-sm text-white"
+                  onChange={(e) => setManualSrc(e.target.value)}
+                  placeholder="Örn: /music/parca.mp3"
+                  value={manualSrc}
                 />
               </label>
               <button
-                className="min-h-11 rounded-full border border-white/15 px-4 md:col-span-2"
-                onClick={() =>
+                className="min-h-10 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-medium text-white hover:bg-white/20"
+                onClick={() => {
+                  if (!manualSrc.trim()) return;
+                  const newId = `custom-${Date.now()}`;
+                  const title = manualTitle.trim() || 'Yeni Parça';
                   onChange((current) => ({
                     ...current,
-                    tracks: current.tracks.filter((item) => item.id !== track.id),
-                  }))
-                }
+                    tracks: [
+                      ...current.tracks,
+                      {
+                        id: newId,
+                        title,
+                        src: manualSrc.trim(),
+                        expression: newTrackEmotion,
+                        license: 'Özel parça',
+                      },
+                    ],
+                  }));
+                  setManualTitle('');
+                  setManualSrc('');
+                  onNotice(`"${title}" ${EXPRESSION_PRESENTATION[newTrackEmotion].label} için eklendi.`);
+                }}
                 type="button"
               >
-                Parçayı listeden çıkar
+                Yolu Ekle
               </button>
             </div>
-          ))}
-          <button
-            className="min-h-11 rounded-full border border-white/15 px-4"
-            onClick={() =>
-              onChange((current) => ({
-                ...current,
-                tracks: [
-                  ...current.tracks,
-                  {
-                    id: `custom-${Date.now()}`,
-                    title: 'Yeni parça',
-                    src: '/music/neutral-hafif.wav',
-                    expression: 'neutral',
-                    license: 'Yerel dosya yolu. Lisansı ayrıca doğrulayın.',
-                  },
-                ],
-              }))
-            }
-            type="button"
-          >
-            Parça yolu ekle
-          </button>
+          </div>
+
+          <div className="space-y-4">
+            {MUSICAL_EXPRESSION_IDS.map((expression) => {
+              const emotionTracks = settings.tracks.filter((t) => t.expression === expression);
+              return (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4" key={expression}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{EXPRESSION_PRESENTATION[expression].emoji}</span>
+                      <h4 className="font-semibold text-white">{EXPRESSION_PRESENTATION[expression].label}</h4>
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300">
+                        {emotionTracks.length} parça {emotionTracks.length > 1 ? '(rastgele seçilir)' : ''}
+                      </span>
+                    </div>
+                    <label className="cursor-pointer rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200 hover:bg-sky-500/20">
+                      + Dosya Ekle
+                      <input
+                        accept="audio/*"
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) {
+                            handleAddFileForEmotion(file, expression);
+                            event.target.value = '';
+                          }
+                        }}
+                        type="file"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 grid gap-3">
+                    {emotionTracks.map((track) => (
+                      <div className="grid gap-3 rounded-xl border border-white/10 bg-slate-900/90 p-3 sm:grid-cols-2 lg:grid-cols-3" key={track.id}>
+                        <label className="flex flex-col gap-1 text-xs text-slate-300">
+                          Başlık
+                          <input
+                            className="min-h-10 rounded-lg border border-white/10 bg-slate-950 px-2.5 text-sm text-white"
+                            onChange={(event) => updateTrack(onChange, track.id, { title: event.target.value })}
+                            value={track.title}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs text-slate-300">
+                          Dosya Yolu
+                          <input
+                            className="min-h-10 rounded-lg border border-white/10 bg-slate-950 px-2.5 text-sm text-white"
+                            onChange={(event) => updateTrack(onChange, track.id, { src: event.target.value })}
+                            value={track.src}
+                          />
+                        </label>
+                        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-1">
+                          <label className="flex-1 cursor-pointer min-h-10 flex items-center justify-center rounded-lg border border-white/15 px-2 text-xs text-slate-300 hover:bg-white/5">
+                            Dosyayı Değiştir
+                            <input
+                              accept="audio/*"
+                              className="sr-only"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) onPreview(track.id, file);
+                              }}
+                              type="file"
+                            />
+                          </label>
+                          <button
+                            className="min-h-10 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 text-xs text-rose-300 hover:bg-rose-500/20"
+                            onClick={() => removeTrack(track.id)}
+                            type="button"
+                          >
+                            Kaldır
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Section>
 
         <Section title="İfade eşikleri">
           <div className="grid gap-3 sm:grid-cols-2">
             <NumberField label="Gülümseme eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'happyMin', value)} step={0.01} value={settings.thresholds.happyMin} />
-            <NumberField label="Kaş çatma eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'browFurrowMin', value)} step={0.01} value={settings.thresholds.browFurrowMin} />
+            <NumberField label="Sinirli ifade eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'browFurrowMin', value)} step={0.01} value={settings.thresholds.browFurrowMin} />
+            <NumberField label="Tiksinti eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'disgustMin', value)} step={0.01} value={settings.thresholds.disgustMin} />
+            <NumberField label="Üzgün ifade eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'sadMin', value)} step={0.01} value={settings.thresholds.sadMin} />
             <NumberField label="Şaşkınlık eşiği" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'surprisedMin', value)} step={0.01} value={settings.thresholds.surprisedMin} />
             <NumberField label="Sakin tavan" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'neutralMax', value)} step={0.01} value={settings.thresholds.neutralMax} />
             <NumberField label="Minimum fark" max={1} min={0} onChange={(value) => patchThreshold(onChange, 'minMargin', value)} step={0.01} value={settings.thresholds.minMargin} />
@@ -204,13 +325,13 @@ export function SettingsPanel({
               onChange={(event) =>
                 onChange((current) => ({
                   ...current,
-                  musicSelection: event.target.value === 'shuffle' ? 'shuffle' : 'sequential',
+                  musicSelection: event.target.value === 'sequential' ? 'sequential' : 'shuffle',
                 }))
               }
               value={settings.musicSelection}
             >
+              <option value="shuffle">Tekrarsız rastgele (Önerilen)</option>
               <option value="sequential">Sırayla</option>
-              <option value="shuffle">Tekrarsız rastgele</option>
             </select>
           </label>
           <div className="mt-3 flex flex-col gap-2 text-base">

@@ -13,6 +13,7 @@ export interface AudioPlayerApi {
   toggle: () => Promise<void>;
   stop: () => Promise<void>;
   duck: () => Promise<void>;
+  unduck: () => Promise<void>;
   setVolume: (volume: number) => void;
   setMuted: (muted: boolean) => void;
   setFadeMs: (fadeMs: number) => void;
@@ -43,6 +44,7 @@ export function useAudioPlayer(initialFadeMs = 1100): AudioPlayerApi {
     toggle: () => controller.toggle(),
     stop: () => controller.stop(),
     duck: () => controller.duck(),
+    unduck: () => controller.unduck(),
     setVolume: (volume) => controller.setVolume(volume),
     setMuted: (muted) => controller.setMuted(muted),
     setFadeMs: (fadeMs) => controller.setFadeMs(fadeMs),

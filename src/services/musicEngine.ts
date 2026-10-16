@@ -4,6 +4,8 @@ export function isMusicalExpression(expression: ExpressionId): expression is Mus
   return (
     expression === 'happy' ||
     expression === 'brow_furrow' ||
+    expression === 'disgust' ||
+    expression === 'sad' ||
     expression === 'surprised' ||
     expression === 'neutral'
   );

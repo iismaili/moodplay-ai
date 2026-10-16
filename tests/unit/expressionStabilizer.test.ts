@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_STABILIZER, ExpressionStabilizer, type StabilizerSample } from '../../src/services/expressionStabilizer.ts';
 import type { CategoryScores, ExpressionId } from '../../src/types/index.ts';
 
-const happyScores: CategoryScores = { happy: 0.7, browFurrow: 0.05, surprised: 0.04 };
-const surprisedScores: CategoryScores = { happy: 0.08, browFurrow: 0.05, surprised: 0.74 };
-const neutralScores: CategoryScores = { happy: 0.05, browFurrow: 0.04, surprised: 0.03 };
-const unknownScores: CategoryScores = { happy: 0.3, browFurrow: 0.28, surprised: 0.1 };
+const happyScores: CategoryScores = { happy: 0.7, browFurrow: 0.05, disgust: 0.02, sad: 0.01, surprised: 0.04 };
+const surprisedScores: CategoryScores = { happy: 0.08, browFurrow: 0.05, disgust: 0.02, sad: 0.01, surprised: 0.74 };
+const neutralScores: CategoryScores = { happy: 0.05, browFurrow: 0.04, disgust: 0.02, sad: 0.01, surprised: 0.03 };
+const unknownScores: CategoryScores = { happy: 0.3, browFurrow: 0.28, disgust: 0.1, sad: 0.1, surprised: 0.1 };
 
 function sample(expression: ExpressionId, scores: CategoryScores): StabilizerSample {
   return { expression, scores, margin: 0.4 };

@@ -47,6 +47,8 @@ export interface StabilizerOutput {
 function categoryScore(scores: CategoryScores, expression: ExpressionId): number {
   if (expression === 'happy') return scores.happy;
   if (expression === 'brow_furrow') return scores.browFurrow;
+  if (expression === 'disgust') return scores.disgust;
+  if (expression === 'sad') return scores.sad;
   if (expression === 'surprised') return scores.surprised;
   return 0;
 }
@@ -84,14 +86,14 @@ export class ExpressionStabilizer {
     this.config = config;
   }
 
-  reset(now: number): StabilizerOutput {
+  reset(now: number, initialMusicalExpression: MusicalExpression | null = null): StabilizerOutput {
     this.samples = [];
     this.sessionStartedAt = now;
-    this.stable = null;
+    this.stable = initialMusicalExpression;
     this.candidate = null;
     this.candidateSince = null;
-    this.musicExpression = null;
-    this.musicChangedAt = null;
+    this.musicExpression = initialMusicalExpression;
+    this.musicChangedAt = initialMusicalExpression ? 0 : null;
     this.pendingMusic = false;
     this.noFaceSince = null;
     this.absenceLatched = false;
@@ -160,11 +162,13 @@ export class ExpressionStabilizer {
     if (window.length < this.config.minSamples) return null;
 
     const counts = new Map<ExpressionId, number>();
-    const totals = { happy: 0, browFurrow: 0, surprised: 0 };
+    const totals = { happy: 0, browFurrow: 0, disgust: 0, sad: 0, surprised: 0 };
     for (const item of window) {
       counts.set(item.sample.expression, (counts.get(item.sample.expression) ?? 0) + 1);
       totals.happy += item.sample.scores.happy;
       totals.browFurrow += item.sample.scores.browFurrow;
+      totals.disgust += item.sample.scores.disgust;
+      totals.sad += item.sample.scores.sad;
       totals.surprised += item.sample.scores.surprised;
     }
 
@@ -184,6 +188,8 @@ export class ExpressionStabilizer {
       avg: {
         happy: totals.happy / size,
         browFurrow: totals.browFurrow / size,
+        disgust: totals.disgust / size,
+        sad: totals.sad / size,
         surprised: totals.surprised / size,
       },
     };

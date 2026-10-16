@@ -15,9 +15,19 @@ export const EXPRESSION_PRESENTATION: Record<ExpressionId, ExpressionPresentatio
     hint: 'Ağız köşeleri yukarıda görünüyor.',
   },
   brow_furrow: {
-    label: 'Kaş çatma',
-    emoji: '🤨',
-    hint: 'Kaşlar aşağı doğru görünüyor. Bu bir duygu teşhisi değildir.',
+    label: 'Sinirli ifade',
+    emoji: '😠',
+    hint: 'Kaşlar çatık ve gergin bir mimik var.',
+  },
+  disgust: {
+    label: 'Tiksinti',
+    emoji: '🤢',
+    hint: 'Burun kırışmış ve üst dudak kalkık görünüyor.',
+  },
+  sad: {
+    label: 'Üzgün ifade',
+    emoji: '😢',
+    hint: 'Dudak köşeleri aşağıda görünüyor.',
   },
   surprised: {
     label: 'Şaşkın ifade',
@@ -43,24 +53,34 @@ export const EXPRESSION_PRESENTATION: Record<ExpressionId, ExpressionPresentatio
 
 export const DEFAULT_MESSAGES: Record<ExpressionId, string[]> = {
   happy: [
-    'Bu gülümsemeye bir oyun havası yakışır!',
-    'Yüzün neşeyle parlıyor, ritim de ona eşlik etsin.',
-    'Bu gülümseme sahneyi aydınlattı!',
+    'Erik Dalı gevrek olur, bas bas bas!',
+    'Yüzün neşeyle parlıyor, bir Erik Dalı yakışır!',
+    'Bu gülümsemeye coşkulu bir Erik Dalı eşlik etsin!',
   ],
   brow_furrow: [
-    'Kızma biraz! Haydi neşemizi yükseltelim.',
-    'Kaşlarını çatmış gibisin; bir kahkaha payı ayıralım.',
-    'O kaşlar insin, tempo yükselsin!',
+    'Kurtlar Vadisi Cendere devrede, ortam gerildi!',
+    'O kaşlar çatıldı, Cendere çalmaya başladı!',
+    'Cendere müziğiyle öfkeni melodiye döküyoruz!',
+  ],
+  disgust: [
+    'Şahdamarım çalıyor! Nane nane nane bal mısın sen!',
+    'Bu tiksintiye ancak Ajdar Nane Nane yakışır!',
+    'Aman aman o ne biçim mimik, Ajdar Nane devrede!',
+  ],
+  sad: [
+    'Hüzünlü bakışlar sezildi, dertlere ortak olalım.',
+    'Biraz hüzün var gibi; derin bir nefes alalım.',
+    'Dudaklar büküldü, bu hüzünlü anı müzikle saralım.',
   ],
   surprised: [
     'Ooo, şaşkınlık seviyesi yükseldi!',
-    'Gözlerin açıldı, sürpriz müziği devrede!',
-    'Bu ifade tam bir sürpriz anı.',
+    'Gözler fal taşı gibi açıldı, sürpriz anı!',
+    'Bu ifade tam bir sürpriz tablosu!',
   ],
   neutral: [
-    'Biraz enerji katalım mı?',
-    'Sakin bir ifade; hafif bir ritimle açılalım.',
-    'Belirgin bir mimik yok, küçük bir hareket katalım.',
+    'Gayet sakin ve huzurlu bir hava var.',
+    'Dingin ve sakin bir moddasın; hafif bir melodi iyi gider.',
+    'Belirgin bir mimik yok, sakin ritimle devam ediyoruz.',
   ],
   unknown: [
     'Biraz daha kameraya bakar mısın?',

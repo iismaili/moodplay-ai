@@ -98,6 +98,105 @@ describe('expressionClassifier', () => {
     expect(result.expression).toBe('no_face');
   });
 
+  it('burun kırıştırma ve üst dudak kalkması ile disgust seçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        noseSneerLeft: 0.85,
+        noseSneerRight: 0.82,
+        mouthUpperUpLeft: 0.72,
+        mouthUpperUpRight: 0.7,
+        mouthShrugUpper: 0.4,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('disgust');
+    expect(result.reason).toMatch(/burun/i);
+  });
+
+  it('dudak köşelerinin inmesi ve hüzünlü mimik ile sad seçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        mouthFrownLeft: 0.8,
+        mouthFrownRight: 0.78,
+        browInnerUp: 0.65,
+        mouthLowerDownLeft: 0.5,
+        mouthLowerDownRight: 0.48,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('sad');
+    expect(result.reason).toMatch(/dudak/i);
+  });
+
+  it('dudak kenarlarının aşağı inmesi (frown) ve iç kaşların kalkması (browInnerUp) birlikteyken (AND) güçlü sad üretir', () => {
+    const result = classifyBlendshapes(
+      blend({
+        mouthFrownLeft: 0.35,
+        mouthFrownRight: 0.35,
+        browInnerUp: 0.32,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('sad');
+    expect(result.scores.sad).toBeGreaterThan(0.3);
+  });
+
+  it('belirgin dudak sarkması (OR) tek başına sad eşiğini geçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        mouthFrownLeft: 0.38,
+        mouthFrownRight: 0.36,
+        browInnerUp: 0.05,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('sad');
+  });
+
+  it('belirgin iç kaş kalkması ve hafif dudak bükülmesi (OR) ile sad seçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        browInnerUp: 0.42,
+        mouthFrownLeft: 0.12,
+        mouthFrownRight: 0.12,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('sad');
+  });
+
+  it('alt dudak büzme (mouthShrugLower/pout) tek başına belirginken sad seçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        mouthShrugLower: 0.35,
+        mouthPucker: 0.25,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('sad');
+    expect(result.reason).toMatch(/alt dudak büzme/i);
+    expect(result.signals.some((s) => s.id === 'pout' && s.value >= 0.25)).toBe(true);
+  });
+
+  it('dil çıkarma (tongueOut) doğrudan disgust seçer', () => {
+    const result = classifyBlendshapes(
+      blend({
+        tongueOut: 0.3,
+      }),
+      thresholds,
+      1,
+    );
+    expect(result.expression).toBe('disgust');
+    expect(result.reason).toMatch(/dil çıkarma/i);
+    expect(result.signals.some((s) => s.id === 'tongueOut' && s.value >= 0.3)).toBe(true);
+  });
+
   it('aralık dışı ve sayı olmayan skorları kırpıp çökmez', () => {
     const result = classifyBlendshapes(
       blend({

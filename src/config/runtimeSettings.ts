@@ -15,23 +15,35 @@ import {
   type StabilizerConfig,
 } from '../types/index.ts';
 
-export const SETTINGS_STORAGE_KEY = 'moodplay-ai-settings-v1';
+export const SETTINGS_STORAGE_KEY = 'moodplay-ai-settings-v6';
 
 export function defaultSettings(): RuntimeSettings {
   return {
-    version: 1,
+    version: 6,
     thresholds: { ...DEFAULT_THRESHOLDS },
-    stabilizer: { ...DEFAULT_STABILIZER },
+    stabilizer: {
+      ...DEFAULT_STABILIZER,
+      initialObservationMs: 800,
+      stableEvidenceMs: 500,
+      musicCooldownMs: 1000,
+      windowMs: 500,
+      minSamples: 3,
+      minMajority: 0.5,
+      hysteresis: 0.02,
+      neutralCeiling: 0.15,
+    },
     volume: 0.8,
     muted: false,
     mirrorVideo: true,
     showOverlay: true,
     showDebug: false,
-    musicSelection: 'sequential',
-    fadeMs: 1100,
+    musicSelection: 'shuffle',
+    fadeMs: 800,
     messages: {
       happy: [...DEFAULT_MESSAGES.happy],
       brow_furrow: [...DEFAULT_MESSAGES.brow_furrow],
+      disgust: [...DEFAULT_MESSAGES.disgust],
+      sad: [...DEFAULT_MESSAGES.sad],
       surprised: [...DEFAULT_MESSAGES.surprised],
       neutral: [...DEFAULT_MESSAGES.neutral],
       unknown: [...DEFAULT_MESSAGES.unknown],
@@ -54,14 +66,29 @@ export function exportSettings(settings: RuntimeSettings): string {
   return JSON.stringify(persistableSettings(settings), null, 2);
 }
 
-export function loadSettings(storage: Pick<Storage, 'getItem'> = localStorage): {
+export function loadSettings(storage: Pick<Storage, 'getItem' | 'removeItem'> = localStorage): {
   settings: RuntimeSettings;
   restoredDefaults: boolean;
 } {
-  const raw = storage.getItem(SETTINGS_STORAGE_KEY);
+  const raw =
+    storage.getItem(SETTINGS_STORAGE_KEY) ??
+    storage.getItem('moodplay-ai-settings-v4') ??
+    storage.getItem('moodplay-ai-settings-v3') ??
+    storage.getItem('moodplay-ai-settings-v2') ??
+    storage.getItem('moodplay-ai-settings-v1');
   if (!raw) return { settings: defaultSettings(), restoredDefaults: false };
   const imported = importSettingsJson(raw);
   if (!imported.ok) return { settings: defaultSettings(), restoredDefaults: true };
+
+  try {
+    storage.removeItem?.('moodplay-ai-settings-v1');
+    storage.removeItem?.('moodplay-ai-settings-v2');
+    storage.removeItem?.('moodplay-ai-settings-v3');
+    storage.removeItem?.('moodplay-ai-settings-v4');
+  } catch {
+    void 0;
+  }
+
   return { settings: imported.settings, restoredDefaults: false };
 }
 
@@ -88,15 +115,16 @@ export function importSettingsJson(
 export function sanitizeSettings(value: unknown): RuntimeSettings | null {
   if (!isRecord(value)) return null;
   const defaults = defaultSettings();
-  const thresholds = sanitizeThresholds(value.thresholds, defaults.thresholds);
-  const stabilizer = sanitizeStabilizer(value.stabilizer, defaults.stabilizer);
+  const isV5 = value.version === 5;
+  const thresholds = isV5 ? sanitizeThresholds(value.thresholds, defaults.thresholds) : defaults.thresholds;
+  const stabilizer = isV5 ? sanitizeStabilizer(value.stabilizer, defaults.stabilizer) : defaults.stabilizer;
   const messages = sanitizeMessages(value.messages, defaults.messages);
   const tracks = sanitizeTracks(value.tracks, defaults.tracks);
   const musicSelection: MusicSelectionMode =
     value.musicSelection === 'shuffle' ? 'shuffle' : 'sequential';
 
   return {
-    version: 1,
+    version: 6,
     thresholds,
     stabilizer,
     volume: readNumber(value.volume, defaults.volume, 0, 1),
@@ -116,6 +144,8 @@ function sanitizeThresholds(value: unknown, defaults: ClassifierThresholds): Cla
   return {
     happyMin: readNumber(record.happyMin, defaults.happyMin, 0, 1),
     browFurrowMin: readNumber(record.browFurrowMin, defaults.browFurrowMin, 0, 1),
+    disgustMin: readNumber(record.disgustMin, defaults.disgustMin, 0, 1),
+    sadMin: readNumber(record.sadMin, defaults.sadMin, 0, 1),
     surprisedMin: readNumber(record.surprisedMin, defaults.surprisedMin, 0, 1),
     neutralMax: readNumber(record.neutralMax, defaults.neutralMax, 0, 1),
     minMargin: readNumber(record.minMargin, defaults.minMargin, 0, 1),
@@ -155,6 +185,14 @@ function sanitizeMessages(
   return messages;
 }
 
+export const OBSOLETE_TRACK_SOURCES = [
+  'brow-neseli',
+  'happy-oyun-havasi',
+  'neutral-hafif',
+  'surprised-surpriz',
+  'happy-parilti',
+];
+
 function sanitizeTracks(value: unknown, defaults: MusicTrack[]): MusicTrack[] {
   if (!Array.isArray(value)) return defaults.map((track) => ({ ...track }));
   const tracks: MusicTrack[] = [];
@@ -164,6 +202,7 @@ function sanitizeTracks(value: unknown, defaults: MusicTrack[]): MusicTrack[] {
     if (!isMusical(item.expression)) continue;
     const src = item.src.trim();
     if (!src || src.startsWith('blob:')) continue;
+    if (OBSOLETE_TRACK_SOURCES.some((obsolete) => src.includes(obsolete))) continue;
     tracks.push({
       id: item.id,
       title: item.title.trim() || 'Adsız parça',
@@ -172,7 +211,8 @@ function sanitizeTracks(value: unknown, defaults: MusicTrack[]): MusicTrack[] {
       license: typeof item.license === 'string' ? item.license : defaults[0]?.license ?? '',
     });
   }
-  return tracks.length > 0 ? tracks : defaults.map((track) => ({ ...track }));
+  const hasAll = MUSICAL_EXPRESSION_IDS.every((exp) => tracks.some((item) => item.expression === exp));
+  return hasAll ? tracks : defaults.map((track) => ({ ...track }));
 }
 
 function isMusical(value: unknown): value is MusicalExpression {

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { CameraView } from '../components/CameraView.tsx';
+import { CampusMoodDashboard } from '../components/CampusMoodDashboard.tsx';
 import { DebugPanel } from '../components/DebugPanel.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { ExpressionCard } from '../components/ExpressionCard.tsx';
@@ -22,7 +23,7 @@ function MoodPlay() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const session = useMoodSession(rootRef, videoRef);
   const showWelcome = session.phase === 'idle' || session.phase === 'stopped';
-  const trackReady = session.audioTitle !== 'İfade kararlı olunca müzik seçilir';
+  const trackReady = true;
 
   return (
     <div className="min-h-dvh overflow-x-hidden bg-slate-950 text-slate-100" ref={rootRef}>
@@ -49,7 +50,16 @@ function MoodPlay() {
           </p>
         ) : null}
         {showWelcome ? (
-          <WelcomeScreen onStart={session.start} stopped={session.phase === 'stopped'} />
+          <div className="space-y-10">
+            <WelcomeScreen onStart={session.start} stopped={session.phase === 'stopped'} />
+            <div className="mx-auto max-w-3xl">
+              <CampusMoodDashboard
+                compact
+                onReset={session.campusStats.resetStats}
+                stats={session.campusStats.stats}
+              />
+            </div>
+          </div>
         ) : (
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.8fr)]">
             <div className="relative min-w-0">
@@ -76,6 +86,21 @@ function MoodPlay() {
                   </button>
                 </div>
               ) : null}
+              {session.audioError ? (
+                <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-amber-200">Sesi Açmak İçin Dokunun</p>
+                    <p className="text-sm text-amber-100/90">{session.audioError}</p>
+                  </div>
+                  <button
+                    className="min-h-11 shrink-0 rounded-full bg-amber-400 px-5 font-bold text-slate-950 shadow-md hover:bg-amber-300 transition-colors"
+                    onClick={session.togglePlayback}
+                    type="button"
+                  >
+                    Sesi Başlat
+                  </button>
+                </div>
+              ) : null}
               <ExpressionCard
                 expression={session.output?.displayExpression ?? 'unknown'}
                 message={session.message}
@@ -92,6 +117,10 @@ function MoodPlay() {
                 playing={session.audioPlaying}
                 title={session.audioTitle}
                 volume={session.audioVolume}
+              />
+              <CampusMoodDashboard
+                onReset={session.campusStats.resetStats}
+                stats={session.campusStats.stats}
               />
               {session.showDebug ? (
                 <DebugPanel

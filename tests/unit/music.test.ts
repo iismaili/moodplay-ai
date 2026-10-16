@@ -68,7 +68,7 @@ describe('musicEngine', () => {
   });
 
   it('varsayılan kitaplıkta her müzikli ifade için en az bir parça vardır', () => {
-    for (const expression of ['happy', 'brow_furrow', 'surprised', 'neutral'] as const) {
+    for (const expression of ['happy', 'brow_furrow', 'disgust', 'sad', 'surprised', 'neutral'] as const) {
       expect(DEFAULT_TRACKS.some((item) => item.expression === expression)).toBe(true);
     }
   });
@@ -133,5 +133,40 @@ describe('musicController', () => {
     const total = sleeps.reduce((sum, value) => sum + value, 0);
     expect(total).toBeGreaterThanOrEqual(800);
     expect(total).toBeLessThanOrEqual(1500);
+  });
+
+  it('aynı parça zaten çalıyorsa yeniden başlatmadan başarılı döner', async () => {
+    const audio = new FakeAudio();
+    const controller = new MusicController({
+      createAudio: () => audio,
+      sleep: () => Promise.resolve(),
+      fadeMs: 800,
+    });
+    const trackItem = track('happy-erik-dali', 'happy');
+    const first = await controller.playTrack(trackItem);
+    expect(first).toEqual({ ok: true });
+    expect(audio.playCount).toBe(1);
+
+    const second = await controller.playTrack(trackItem);
+    expect(second).toEqual({ ok: true });
+    // Yeniden başlatılmadı, play sayısı artmadı
+    expect(audio.playCount).toBe(1);
+  });
+
+  it('duygu değiştiğinde önceki parçayı kısıp durdurur ve yeni parçayı başlatır', async () => {
+    const audio = new FakeAudio();
+    const controller = new MusicController({
+      createAudio: () => audio,
+      sleep: () => Promise.resolve(),
+      fadeMs: 800,
+    });
+    await controller.playTrack(track('happy-erik-dali', 'happy'));
+    expect(controller.snapshot().track?.id).toBe('happy-erik-dali');
+
+    // Duygu üzgün olarak değiştiğinde
+    await controller.playTrack(track('sad-uzgun', 'sad'));
+    expect(audio.pauseCount).toBeGreaterThan(0);
+    expect(controller.snapshot().track?.id).toBe('sad-uzgun');
+    expect(controller.snapshot().playing).toBe(true);
   });
 });

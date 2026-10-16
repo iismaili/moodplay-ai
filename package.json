@@ -12,9 +12,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "if [ -x /home/ismail/.nvm/versions/node/v24.16.0/bin/node ]; then /home/ismail/.nvm/versions/node/v24.16.0/bin/node ./node_modules/.bin/vitest run; else vitest run; fi",
     "test:e2e": "playwright test",
-    "music:generate": "node scripts/generate-music.mjs",
     "setup:assets": "node scripts/copy-wasm.mjs"
   },
   "dependencies": {

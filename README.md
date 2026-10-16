@@ -42,17 +42,21 @@ npm run preview
 
 `dist/` tek bilgisayarda statik olarak servis edilebilir. Kamera için sayfa yine localhost veya HTTPS olmalıdır. Model ve WASM `public/` altından pakete girer; ilk açılıştan sonra bu dosyalar yerelde kalır.
 
-## Müzik
+## Müzik ve Ses Geçişleri
 
-`public/music/` altındaki WAV dosyaları `scripts/generate-music.mjs` ile üretilmiş kısa sentetik döngülerdir. Telifli eser içermezler ve proje içi kullanım için serbesttir. Başka bir parça kullanacaksanız lisansını ayrıca doğrulayın, dosyayı `public/music` altına koyun ve Ayarlar panelinden yolunu yazın.
+`public/music/` altındaki parçalar duygulara göre dinamik olarak çalınır:
+- **Mutlu / Gülümseme**: Erik Dalı (`/music/erikdali.mp3`)
+- **Sinirli / Kaş Çatma**: Cendere (`/music/cendere.mp3`)
+- **Tiksinti**: Ajdar - Nane Nane (`/music/ajdarnane.mp3`)
+- **Üzgün**: Üzgün (`/music/uzgun.mp3`)
+- **Sakin / Nötr**: Sakin (`/music/sakin.mp3`)
+- **Şaşkın**: Erik Dalı (`/music/erikdali.mp3`)
 
-Dosya seçici yalnızca o oturumda çalan bir önizleme üretir. Kalıcı olması için yol elle yazılır; sunucuya yükleme yoktur. `blob:` adresleri localStorage'a yazılmaz.
+Duygu değiştiğinde çalan parça aniden kesilmez veya yeni parçayla üst üste binmez (overlap önlenir). Mevcut parça kısa bir fade-out ile kısılıp tamamen durdurulur ve yeni parça kısa bir fade-in ile 0'dan hedef seviyeye yükseltilerek başlatılır.
 
-## Ayarlar
+## Anonim Kampüs Duygu Haritası
 
-Ayarlar `moodplay-ai-settings-v1` anahtarıyla localStorage'da durur. Bozuk JSON varsayılanlara döner. Panelden mesajlar, parça yolu ve başlığı, eşikler, kararlılık süreleri, geçiş süresi (800–1500 ms), sıra veya rastgele seçim değiştirilebilir. JSON içe ve dışa aktarma vardır.
-
-Varsayılan zamanlar: 2 sn ilk gözlem, 3 sn yeni ifade kanıtı, 15 sn müzik değiştirme beklemesi, 5 sn yüz yoksa ses kısma.
+Uygulama, tespit edilen duyguların (mutlu, üzgün, sinirli, tiksinti, şaşkın, sakin) toplam dağılımını yerel sayaç state'i ile tutar ve modern bir istatistik panelinde sunar (Örn: *Bugün %60 Mutlu, %20 Üzgün*). Sayfa yenilendiğinde verilerin kaybolmaması için sayaçlar anonim olarak `localStorage` üzerinde saklanır.
 
 ## Test
 
