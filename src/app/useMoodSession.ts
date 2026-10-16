@@ -217,7 +217,7 @@ export function useMoodSession(
     cancelCountdown();
     setFlashActive(true);
     playTone(880, 0.25, 'triangle');
-    setTimeout(() => setFlashActive(false), 300);
+    setTimeout(() => setFlashActive(false), 150);
 
     const now = Date.now();
     // Son 1200ms içindeki yüz örneklerini topla

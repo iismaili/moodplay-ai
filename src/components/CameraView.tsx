@@ -56,23 +56,33 @@ export function CameraView({
           <FaceOverlay landmarks={landmarks} visible={showOverlay} />
         </div>
 
-        {/* 5 Saniyelik Geri Sayım Görsel Katmanı */}
+        {/* 5 Saniyelik Geri Sayım Görsel Katmanı (Bulanıklık yok, video net görünür) */}
         {countdown !== null ? (
           <div
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xs transition-all"
+            className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-between p-4 sm:p-6"
             data-testid="countdown-overlay"
           >
-            <div className="relative flex h-36 w-36 sm:h-44 sm:w-44 items-center justify-center rounded-full border-4 border-sky-400 bg-slate-900/90 shadow-[0_0_50px_rgba(56,189,248,0.5)]">
-              <span className="text-7xl sm:text-8xl font-black text-white animate-pulse">
+            {/* Üst Kısım: Zamanlayıcı Rozeti */}
+            <div className="flex items-center gap-3 rounded-full bg-slate-950/70 border-2 border-sky-400 px-5 py-2 shadow-2xl">
+              <span className="text-3xl sm:text-4xl font-black text-sky-300 animate-pulse">
+                {countdown}
+              </span>
+              <span className="text-sm sm:text-base font-semibold text-white tracking-wide">
+                saniye kaldı
+              </span>
+            </div>
+
+            {/* Orta Kısım: Büyük Saydam Sayı (Arka plan karartması/bulanıklığı olmadan) */}
+            <div className="flex items-center justify-center">
+              <span className="text-8xl sm:text-9xl font-black text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] animate-pulse">
                 {countdown}
               </span>
             </div>
-            <p className="mt-4 rounded-full bg-slate-900/90 border border-white/20 px-5 py-2 text-base sm:text-lg font-semibold text-sky-200 shadow-lg text-center">
-              📸 Kameraya ifadenizi gösterin!
-            </p>
-            <p className="mt-2 text-xs sm:text-sm text-slate-300 text-center font-medium">
-              😄 Gülümseyin | 😠 Kaş Çatın | 😲 Şaşırın | 😔 Üzülün | 😐 Sakin
-            </p>
+
+            {/* Alt Kısım: Yönlendirme İpucu */}
+            <div className="rounded-full bg-slate-950/80 border border-white/20 px-5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xl text-center">
+              📸 Kameraya ifadenizi gösterin! (😄 Gülümse | 😠 Kaş Çat | 😲 Şaşır | 😔 Üzül | 😐 Sakin)
+            </div>
           </div>
         ) : null}
 
