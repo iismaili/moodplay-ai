@@ -10,7 +10,7 @@ import { classifyBlendshapes } from '../services/expressionClassifier.ts';
 import { ExpressionStabilizer, type StabilizerOutput } from '../services/expressionStabilizer.ts';
 import { emptyPickerState, isMusicalExpression, pickMessage, pickNextTrack, type PickerState } from '../services/musicEngine.ts';
 import { createVisitorSession, rotateVisitor, type VisitorSession } from '../services/sessionManager.ts';
-import type { AppPhase, ClassificationFrame, DetectionFrame, ExpressionId, MusicTrack, RuntimeSettings } from '../types/index.ts';
+import type { AppPhase, CategoryScores, ClassificationFrame, DetectionFrame, ExpressionId, MusicTrack, RuntimeSettings } from '../types/index.ts';
 import { PHASE_LABEL, resolvePhase } from './resolvePhase.ts';
 
 export interface MoodSession {
@@ -39,6 +39,16 @@ export interface MoodSession {
   errorText: string | null;
   delegate: DetectionFrame['delegate'] | null;
   perf: DetectionFrame['perf'] | null;
+
+  // 5 saniyelik geri sayım ve anlık fotoğraf/ifade yakalama
+  countdown: number | null;
+  isCountingDown: boolean;
+  capturedExpression: ExpressionId | null;
+  captureStatus: 'idle' | 'counting' | 'captured' | 'no_face';
+  flashActive: boolean;
+  startCountdown: () => void;
+  cancelCountdown: () => void;
+
   start: () => void;
   stop: () => void;
   retry: () => void;
@@ -56,6 +66,28 @@ export interface MoodSession {
   setVolume: (volume: number) => void;
   setMuted: (muted: boolean) => void;
   testMusic: () => void;
+}
+
+function playTone(frequency: number, duration: number, type: OscillatorType = 'sine'): void {
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch {
+    // Tarayıcı audio context kısıtlıysa sessizce devam eder
+  }
 }
 
 export function useMoodSession(
@@ -82,7 +114,6 @@ export function useMoodSession(
   const [permissionPending, setPermissionPending] = useState(false);
   const [cameraAttempt, setCameraAttempt] = useState(0);
   const [analysisOn, setAnalysisOn] = useState(false);
-  const [output, setOutput] = useState<StabilizerOutput | null>(null);
   const [classification, setClassification] = useState<ClassificationFrame | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [frame, setFrame] = useState<DetectionFrame | null>(null);
@@ -93,11 +124,22 @@ export function useMoodSession(
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
 
+  // 5sn geri sayım durumları
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isCountingDown, setIsCountingDown] = useState(false);
+  const [capturedExpression, setCapturedExpression] = useState<ExpressionId | null>(null);
+  const [captureStatus, setCaptureStatus] = useState<'idle' | 'counting' | 'captured' | 'no_face'>('idle');
+  const [flashActive, setFlashActive] = useState(false);
+
+  const countdownTimerRef = useRef<number | null>(null);
+  const countdownSamplesRef = useRef<Array<{ expression: ExpressionId; scores: CategoryScores; t: number }>>([]);
+  const latestClassificationRef = useRef<ClassificationFrame | null>(null);
+  const latestFaceCountRef = useRef<number>(0);
+
   const pickerRef = useRef<PickerState>(emptyPickerState());
   const revisionRef = useRef(0);
   const displayRef = useRef<ExpressionId | null>(null);
   const messageRef = useRef<string | null>(null);
-  const duckRef = useRef(false);
   const lifecycleRef = useRef<'idle' | 'running' | 'stopped'>('idle');
   const userPausedAudioRef = useRef(false);
 
@@ -105,9 +147,29 @@ export function useMoodSession(
     pickerRef.current = emptyPickerState();
     displayRef.current = null;
     messageRef.current = null;
-    duckRef.current = false;
     setMessage(null);
     setClassification(null);
+    setCapturedExpression(null);
+    setCaptureStatus('idle');
+    setCountdown(null);
+    setIsCountingDown(false);
+  }, []);
+
+  const cancelCountdown = useCallback(() => {
+    if (countdownTimerRef.current !== null) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setIsCountingDown(false);
+    setCountdown(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current !== null) {
+        clearInterval(countdownTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -126,7 +188,7 @@ export function useMoodSession(
   }, [rootRef]);
 
   const playExpression = useCallback(
-    (expression: StabilizerOutput['musicExpression'], settings: RuntimeSettings) => {
+    (expression: ExpressionId | null, settings: RuntimeSettings) => {
       if (userPausedAudioRef.current || lifecycleRef.current !== 'running') {
         return;
       }
@@ -151,65 +213,127 @@ export function useMoodSession(
     [setLibraryError],
   );
 
+  const performCapture = useCallback(() => {
+    cancelCountdown();
+    setFlashActive(true);
+    playTone(880, 0.25, 'triangle');
+    setTimeout(() => setFlashActive(false), 300);
+
+    const now = Date.now();
+    // Son 1200ms içindeki yüz örneklerini topla
+    const recent = countdownSamplesRef.current.filter((item) => item.t >= now - 1200);
+    const validFaces = recent.filter((item) => item.expression !== 'no_face' && item.expression !== 'unknown');
+
+    let winner: ExpressionId = 'neutral';
+    if (validFaces.length === 0) {
+      // Anlık classification kontrolü
+      if (
+        latestClassificationRef.current &&
+        latestClassificationRef.current.expression !== 'no_face' &&
+        latestClassificationRef.current.expression !== 'unknown'
+      ) {
+        winner = latestClassificationRef.current.expression;
+      } else {
+        // Yüz algılanamadı
+        setCaptureStatus('no_face');
+        setMessage('Kamerada yüz algılanamadı! Lütfen tam karşıya geçip butona tekrar basın.');
+        return;
+      }
+    } else {
+      // Örnekler arasında baskın olan duyguyu hesapla
+      const counts: Record<string, number> = {
+        happy: 0,
+        brow_furrow: 0,
+        disgust: 0,
+        sad: 0,
+        surprised: 0,
+        neutral: 0,
+      };
+      for (const sample of validFaces) {
+        if (counts[sample.expression] !== undefined) {
+          counts[sample.expression] += 1;
+        }
+      }
+      let topCount = -1;
+      let topExp: ExpressionId = 'neutral';
+      for (const [exp, c] of Object.entries(counts)) {
+        if (c > topCount) {
+          topCount = c;
+          topExp = exp as ExpressionId;
+        }
+      }
+      winner = topExp;
+    }
+
+    setCaptureStatus('captured');
+    setCapturedExpression(winner);
+    displayRef.current = winner;
+
+    const list = settingsRef.current.messages[winner] ?? [];
+    const text = pickMessage(list, messageRef.current);
+    messageRef.current = text;
+    setMessage(text);
+
+    campusStats.recordMood(winner);
+
+    // Kilitlenen ifadeye uygun parçayı çal
+    userPausedAudioRef.current = false;
+    playExpression(winner, settingsRef.current);
+  }, [cancelCountdown, campusStats, playExpression]);
+
+  const startCountdown = useCallback(() => {
+    if (lifecycleRef.current !== 'running' || isCountingDown) return;
+    void audioRef.current.unlock();
+    cancelCountdown();
+    countdownSamplesRef.current = [];
+    setIsCountingDown(true);
+    setCaptureStatus('counting');
+    setCountdown(5);
+    playTone(600, 0.08);
+
+    let remaining = 5;
+    const interval = window.setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setCountdown(remaining);
+        playTone(600, 0.08);
+      } else {
+        clearInterval(interval);
+        countdownTimerRef.current = null;
+        performCapture();
+      }
+    }, 1000);
+
+    countdownTimerRef.current = interval;
+  }, [cancelCountdown, isCountingDown, performCapture]);
+
   const onFrame = useCallback(
     (detection: DetectionFrame) => {
       if (lifecycleRef.current !== 'running') return;
       const settings = settingsRef.current;
       const classified = classifyBlendshapes(detection.blendshapes, settings.thresholds, detection.faceCount);
-      const next = stabilizer.push(
-        {
-          expression: classified.expression,
-          scores: classified.scores,
-          margin: classified.margin,
-        },
-        Date.now(),
-      );
+      latestClassificationRef.current = classified;
+      latestFaceCountRef.current = detection.faceCount;
+
       setFrame(detection);
       setClassification(classified);
-      setOutput(next);
       setCloserHint(shouldPromptCloser(faceBounds(detection.landmarks)));
 
-      if (next.sessionReset) {
-        clearPresentation();
-        setVisitor((current) => rotateVisitor(current, Date.now()));
-        void audioRef.current.stop();
+      const now = Date.now();
+      countdownSamplesRef.current.push({
+        expression: classified.expression,
+        scores: classified.scores,
+        t: now,
+      });
+      if (countdownSamplesRef.current.length > 120) {
+        countdownSamplesRef.current.shift();
       }
 
-      const targetExpression = next.musicExpression;
-      const currentTrackExp = audioRef.current.snapshot.track?.expression;
-      const shouldSyncMusic =
-        Boolean(targetExpression) &&
-        targetExpression !== currentTrackExp &&
-        !next.sessionReset &&
-        !userPausedAudioRef.current &&
-        lifecycleRef.current === 'running';
-
-      if (shouldSyncMusic || next.debug.musicRevision !== revisionRef.current) {
-        revisionRef.current = next.debug.musicRevision;
-        if (!next.sessionReset && !userPausedAudioRef.current && lifecycleRef.current === 'running') {
-          playExpression(targetExpression, settings);
-        }
-      }
-
-      if (next.duckAudio && !duckRef.current) {
-        duckRef.current = true;
-        void audioRef.current.duck();
-      } else if (!next.duckAudio && duckRef.current) {
-        duckRef.current = false;
-        void audioRef.current.unduck();
-      }
-
-      if (!next.observing) {
-        if (displayRef.current !== next.displayExpression) {
-          displayRef.current = next.displayExpression;
-          const text = pickMessage(settings.messages[next.displayExpression], messageRef.current);
-          messageRef.current = text;
-          setMessage(text);
-          campusStats.recordMood(next.displayExpression);
-        }
-      }
+      // "anlık değişim olmasın":
+      // Frame geldikçe müzik otomatik DEĞİŞTİRİLMEZ!
+      // Sadece geri sayım tamamlanıp performCapture çağrıldığında ifade kilitlenir.
     },
-    [campusStats, clearPresentation, playExpression, stabilizer],
+    [],
   );
 
   const analysis = useFaceLandmarker({
@@ -235,57 +359,49 @@ export function useMoodSession(
 
   const start = useCallback(() => {
     lifecycleRef.current = 'running';
-    userPausedAudioRef.current = false;
-    const tracks = resolveTracks(settingsRef.current.tracks, previewsRef.current);
-    const initialTrack = tracks.find((item) => item.expression === 'neutral') ?? tracks[0];
-    if (initialTrack) {
-      void audioRef.current.playTrack(initialTrack);
-    } else {
-      void audioRef.current.unlock();
-    }
+    userPausedAudioRef.current = true;
+    void audioRef.current.unlock();
     const now = Date.now();
-    const blank = stabilizer.reset(now, 'neutral');
-    revisionRef.current = stabilizer.revision;
+    cancelCountdown();
     clearPresentation();
-    setOutput(blank);
     setVisitor((current) => rotateVisitor(current, now));
     setLifecycle('running');
     setPermissionPending(true);
     setAnalysisOn(false);
     camera.clearError();
     setCameraAttempt((value) => value + 1);
-  }, [camera, clearPresentation, stabilizer]);
+  }, [camera, cancelCountdown, clearPresentation]);
 
   const stop = useCallback(() => {
     lifecycleRef.current = 'stopped';
     userPausedAudioRef.current = true;
+    cancelCountdown();
     setAnalysisOn(false);
     setPermissionPending(false);
     setLifecycle('stopped');
     camera.stop();
     void audioRef.current.stop();
-  }, [camera]);
+  }, [camera, cancelCountdown]);
 
   const retry = useCallback(() => {
     lifecycleRef.current = 'running';
-    userPausedAudioRef.current = false;
+    userPausedAudioRef.current = true;
+    cancelCountdown();
     camera.clearError();
     if (analysis.error) analysis.retry();
     setLifecycle('running');
     setPermissionPending(true);
     setAnalysisOn(false);
     setCameraAttempt((value) => value + 1);
-  }, [analysis, camera]);
+  }, [analysis, camera, cancelCountdown]);
 
   const newVisitor = useCallback(() => {
     const now = Date.now();
-    const blank = stabilizer.reset(now, 'neutral');
-    revisionRef.current = stabilizer.revision;
+    cancelCountdown();
     clearPresentation();
-    setOutput(blank);
     setVisitor((current) => rotateVisitor(current, now));
     void audioRef.current.stop();
-  }, [clearPresentation, stabilizer]);
+  }, [cancelCountdown, clearPresentation]);
 
   const toggleFullscreen = useCallback(async () => {
     const node = rootRef.current;
@@ -310,10 +426,9 @@ export function useMoodSession(
   const nextTrack = useCallback(() => {
     if (audioRef.current.isTransitioning()) return;
     userPausedAudioRef.current = false;
-    const expression = output?.musicExpression ?? 'neutral';
-    if (!expression) return;
+    const expression = capturedExpression ?? 'neutral';
     playExpression(expression, settingsRef.current);
-  }, [output?.musicExpression, playExpression]);
+  }, [capturedExpression, playExpression]);
 
   const testMusic = useCallback(() => {
     userPausedAudioRef.current = false;
@@ -329,27 +444,52 @@ export function useMoodSession(
     modelReady: analysis.ready,
     cameraError: camera.error,
     modelError: analysis.error,
-    duckAudio: output?.duckAudio ?? false,
-    musicActive: Boolean(output?.musicExpression),
+    duckAudio: false,
+    musicActive: Boolean(capturedExpression && audio.snapshot.playing),
   });
 
-  const activeMessage = resolveVisibleMessage(output, message, settingsApi.settings);
+  const effectiveOutput: StabilizerOutput = {
+    observing: captureStatus !== 'captured',
+    displayExpression: capturedExpression ?? (captureStatus === 'no_face' ? 'no_face' : 'unknown'),
+    stableExpression: capturedExpression,
+    musicExpression: capturedExpression && isMusicalExpression(capturedExpression) ? capturedExpression : null,
+    duckAudio: false,
+    sessionReset: false,
+    debug: {
+      windowCounts: {},
+      candidate: null,
+      candidateHeldMs: 0,
+      observationElapsedMs: 0,
+      cooldownRemainingMs: 0,
+      musicRevision: revisionRef.current,
+      pendingMusic: false,
+    },
+  };
+
+  const activeMessage = resolveVisibleMessage(
+    captureStatus,
+    countdown,
+    capturedExpression,
+    effectiveOutput,
+    message,
+    settingsApi.settings,
+  );
   const errorText = camera.error ?? analysis.error;
 
   return {
     phase,
-    phaseLabel: PHASE_LABEL[phase],
+    phaseLabel: isCountingDown ? `Geri sayılıyor (${countdown}s)` : PHASE_LABEL[phase],
     settings: settingsApi.settings,
     settingsNotice: settingsApi.notice,
     devices: camera.devices,
     deviceId: camera.deviceId,
     landmarks: frame?.landmarks ?? [],
     classification,
-    output,
+    output: effectiveOutput,
     message: activeMessage,
     closerHint,
     campusStats,
-    audioTitle: audio.snapshot.track?.title ?? 'İfade kararlı olunca müzik seçilir',
+    audioTitle: audio.snapshot.track?.title ?? (capturedExpression ? 'Parça seçildi' : 'Duygumu Analiz Et butonuna basın'),
     audioPlaying: audio.snapshot.playing,
     audioError: libraryError ?? audio.snapshot.error,
     audioVolume: settingsApi.settings.volume,
@@ -362,6 +502,16 @@ export function useMoodSession(
     errorText,
     delegate: frame?.delegate ?? null,
     perf: frame?.perf ?? null,
+
+    // Geri sayım özellikleri
+    countdown,
+    isCountingDown,
+    capturedExpression,
+    captureStatus,
+    flashActive,
+    startCountdown,
+    cancelCountdown,
+
     start,
     stop,
     retry,
@@ -386,7 +536,7 @@ export function useMoodSession(
       const isError = snap.status === 'error';
       if (!currentTrack || isError) {
         const tracks = resolveTracks(settingsRef.current.tracks, previewsRef.current);
-        const targetExp = output?.musicExpression ?? 'neutral';
+        const targetExp = capturedExpression ?? 'neutral';
         const track = tracks.find((item) => item.expression === targetExp) ?? tracks[0];
         if (track) void audioRef.current.playTrack(track);
         return;
@@ -412,10 +562,27 @@ function resolveTracks(tracks: MusicTrack[], previews: Record<string, string>): 
 }
 
 function resolveVisibleMessage(
+  captureStatus: 'idle' | 'counting' | 'captured' | 'no_face',
+  countdown: number | null,
+  capturedExpression: ExpressionId | null,
   output: StabilizerOutput | null,
   message: string | null,
   settings: RuntimeSettings,
 ): string {
+  if (captureStatus === 'idle') {
+    return 'Butona basın, 5 saniye içinde kameraya ifadenizi gösterin!';
+  }
+  if (captureStatus === 'counting') {
+    return `${countdown ?? 5} saniye kaldı! Mimiklerinizi kameraya gösterin...`;
+  }
+  if (captureStatus === 'no_face') {
+    return 'Kamerada yüz bulunamadı! Lütfen tam karşıya geçip tekrar butona basın.';
+  }
+  if (capturedExpression) {
+    const list = settings.messages[capturedExpression] ?? [];
+    if (message && list.includes(message)) return message;
+    return list[0] ?? OBSERVING_MESSAGE;
+  }
   if (!output || output.observing) return OBSERVING_MESSAGE;
   const list = settings.messages[output.displayExpression];
   if (message && list.includes(message)) return message;

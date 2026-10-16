@@ -64,18 +64,26 @@ function MoodPlay() {
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.8fr)]">
             <div className="relative min-w-0">
               <CameraView
+                captureStatus={session.captureStatus}
+                capturedExpression={session.capturedExpression}
                 closerHint={session.closerHint}
+                countdown={session.countdown}
                 deviceId={session.deviceId}
                 devices={session.devices}
+                flashActive={session.flashActive}
+                isCountingDown={session.isCountingDown}
                 landmarks={session.landmarks}
                 mirror={session.settings.mirrorVideo}
                 onDeviceChange={session.changeDevice}
+                onStartCountdown={session.startCountdown}
                 onStop={session.stop}
                 showOverlay={session.settings.showOverlay}
                 statusText={session.phaseLabel}
                 videoRef={videoRef}
               />
-              {session.phase === 'no_face' ? <WaitingOverlay message={session.message} /> : null}
+              {session.phase === 'no_face' && !session.isCountingDown ? (
+                <WaitingOverlay message={session.message} />
+              ) : null}
             </div>
             <div className="grid gap-4">
               {session.errorText ? (
@@ -102,9 +110,11 @@ function MoodPlay() {
                 </div>
               ) : null}
               <ExpressionCard
-                expression={session.output?.displayExpression ?? 'unknown'}
+                captureStatus={session.captureStatus}
+                countdown={session.countdown}
+                expression={session.capturedExpression ?? session.output?.displayExpression ?? 'unknown'}
                 message={session.message}
-                observing={session.output?.observing ?? session.phase !== 'no_face'}
+                observing={session.captureStatus !== 'captured'}
               />
               <MusicPlayer
                 canControl={trackReady}
