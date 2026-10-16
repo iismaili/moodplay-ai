@@ -6,6 +6,34 @@ import { CameraView } from '../../src/components/CameraView.tsx';
 import { ExpressionCard } from '../../src/components/ExpressionCard.tsx';
 
 describe('CameraView countdown and snapshot UI', () => {
+  it('kamera ekranında hiçbir yazı, sayaç veya şekil katmanı barındırmaz', () => {
+    const videoRef = createRef<HTMLVideoElement>();
+    const { container } = render(
+      <CameraView
+        captureStatus="counting"
+        capturedExpression={null}
+        closerHint={false}
+        countdown={4}
+        deviceId=""
+        devices={[]}
+        isCountingDown={true}
+        mirror={true}
+        onDeviceChange={() => undefined}
+        onStartCountdown={() => undefined}
+        onStop={() => undefined}
+        videoRef={videoRef}
+      />,
+    );
+
+    // Video kapsayıcısı içinde overlay veya yazı olmamalı
+    const videoContainer = container.querySelector('.aspect-\\[4\\/3\\]') || container.querySelector('video')?.parentElement;
+    expect(videoContainer).toBeTruthy();
+    expect(screen.queryByTestId('countdown-overlay')).toBeNull();
+    expect(screen.queryByTestId('model-status')).toBeNull();
+    expect(screen.queryByTestId('camera-flash')).toBeNull();
+    expect(screen.queryByText(/Tek kişi izlenir/i)).toBeNull();
+  });
+
   it('başlangıçta 5 saniyelik analiz butonunu gösterir', () => {
     const videoRef = createRef<HTMLVideoElement>();
     render(
@@ -16,15 +44,11 @@ describe('CameraView countdown and snapshot UI', () => {
         countdown={null}
         deviceId=""
         devices={[]}
-        flashActive={false}
         isCountingDown={false}
-        landmarks={[]}
         mirror={true}
         onDeviceChange={() => undefined}
         onStartCountdown={() => undefined}
         onStop={() => undefined}
-        showOverlay={true}
-        statusText="Hazır"
         videoRef={videoRef}
       />,
     );
@@ -32,10 +56,9 @@ describe('CameraView countdown and snapshot UI', () => {
     const button = screen.getByTestId('countdown-trigger-button');
     expect(button).toBeInTheDocument();
     expect(button).toHaveTextContent(/Duygumu Analiz Et/i);
-    expect(screen.queryByTestId('countdown-overlay')).toBeNull();
   });
 
-  it('geri sayım sırasında büyük sayacı ve bilgilendirme metnini gösterir, butonu devre dışı bırakır', () => {
+  it('geri sayım sırasında buton üzerinde sayacı gösterir ve butonu devre dışı bırakır', () => {
     const videoRef = createRef<HTMLVideoElement>();
     render(
       <CameraView
@@ -45,53 +68,19 @@ describe('CameraView countdown and snapshot UI', () => {
         countdown={4}
         deviceId=""
         devices={[]}
-        flashActive={false}
         isCountingDown={true}
-        landmarks={[]}
         mirror={true}
         onDeviceChange={() => undefined}
         onStartCountdown={() => undefined}
         onStop={() => undefined}
-        showOverlay={true}
-        statusText="İfade gözleniyor"
         videoRef={videoRef}
       />,
     );
-
-    const overlay = screen.getByTestId('countdown-overlay');
-    expect(overlay).toBeInTheDocument();
-    expect(overlay).toHaveTextContent('4');
-    expect(overlay).toHaveTextContent(/Kameraya ifadenizi gösterin/i);
 
     const button = screen.getByTestId('countdown-trigger-button');
     expect(button).toBeDisabled();
-    expect(button).toHaveTextContent(/İfade Yakalanıyor: 4 sn/i);
-  });
-
-  it('flaş aktif olduğunda flaş katmanını gösterir', () => {
-    const videoRef = createRef<HTMLVideoElement>();
-    render(
-      <CameraView
-        captureStatus="counting"
-        capturedExpression={null}
-        closerHint={false}
-        countdown={null}
-        deviceId=""
-        devices={[]}
-        flashActive={true}
-        isCountingDown={false}
-        landmarks={[]}
-        mirror={true}
-        onDeviceChange={() => undefined}
-        onStartCountdown={() => undefined}
-        onStop={() => undefined}
-        showOverlay={true}
-        statusText="İfade gözleniyor"
-        videoRef={videoRef}
-      />,
-    );
-
-    expect(screen.getByTestId('camera-flash')).toBeInTheDocument();
+    expect(button).toHaveTextContent('4');
+    expect(button).toHaveTextContent(/Saniye Kaldı/i);
   });
 
   it('ifade yakalandığında kilitli olduğunu belirtir ve yeniden yakalama butonunu sunar', () => {
@@ -104,15 +93,11 @@ describe('CameraView countdown and snapshot UI', () => {
         countdown={null}
         deviceId=""
         devices={[]}
-        flashActive={false}
         isCountingDown={false}
-        landmarks={[]}
         mirror={true}
         onDeviceChange={() => undefined}
         onStartCountdown={() => undefined}
         onStop={() => undefined}
-        showOverlay={true}
-        statusText="Müzik açık"
         videoRef={videoRef}
       />,
     );
@@ -136,15 +121,11 @@ describe('CameraView countdown and snapshot UI', () => {
         countdown={null}
         deviceId=""
         devices={[]}
-        flashActive={false}
         isCountingDown={false}
-        landmarks={[]}
         mirror={true}
         onDeviceChange={() => undefined}
         onStartCountdown={handleStart}
         onStop={() => undefined}
-        showOverlay={true}
-        statusText="Hazır"
         videoRef={videoRef}
       />,
     );

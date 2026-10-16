@@ -6,7 +6,6 @@ import { ErrorBoundary } from '../components/ErrorBoundary.tsx';
 import { ExpressionCard } from '../components/ExpressionCard.tsx';
 import { MusicPlayer } from '../components/MusicPlayer.tsx';
 import { SettingsPanel } from '../components/SettingsPanel.tsx';
-import { WaitingOverlay } from '../components/WaitingOverlay.tsx';
 import { WelcomeScreen } from '../components/WelcomeScreen.tsx';
 import { useMoodSession } from './useMoodSession.ts';
 
@@ -81,9 +80,6 @@ function MoodPlay() {
                 statusText={session.phaseLabel}
                 videoRef={videoRef}
               />
-              {session.phase === 'no_face' && !session.isCountingDown ? (
-                <WaitingOverlay message={session.message} />
-              ) : null}
             </div>
             <div className="grid gap-4">
               {session.errorText ? (
