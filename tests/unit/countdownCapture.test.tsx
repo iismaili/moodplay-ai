@@ -6,7 +6,7 @@ import { CameraView } from '../../src/components/CameraView.tsx';
 import { ExpressionCard } from '../../src/components/ExpressionCard.tsx';
 
 describe('CameraView countdown and snapshot UI', () => {
-  it('kamera ekranında hiçbir yazı, sayaç veya şekil katmanı barındırmaz', () => {
+  it('kamera ekranında yüz takip çizgileri yer alır, ancak yazı veya durum rozetleri barındırmaz', () => {
     const videoRef = createRef<HTMLVideoElement>();
     const { container } = render(
       <CameraView
@@ -17,17 +17,21 @@ describe('CameraView countdown and snapshot UI', () => {
         deviceId=""
         devices={[]}
         isCountingDown={true}
+        landmarks={[{ x: 0.5, y: 0.5, z: 0 }]}
         mirror={true}
         onDeviceChange={() => undefined}
         onStartCountdown={() => undefined}
         onStop={() => undefined}
+        showOverlay={true}
         videoRef={videoRef}
       />,
     );
 
-    // Video kapsayıcısı içinde overlay veya yazı olmamalı
-    const videoContainer = container.querySelector('.aspect-\\[4\\/3\\]') || container.querySelector('video')?.parentElement;
-    expect(videoContainer).toBeTruthy();
+    // Video ve yüz takip kanvası mevcut olmalı
+    const canvas = container.querySelector('canvas');
+    expect(canvas).toBeTruthy();
+
+    // Ancak hiçbir yazı, durum veya sayaç katmanı olmamalı
     expect(screen.queryByTestId('countdown-overlay')).toBeNull();
     expect(screen.queryByTestId('model-status')).toBeNull();
     expect(screen.queryByTestId('camera-flash')).toBeNull();

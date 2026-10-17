@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import type { ExpressionId, FacePoint } from '../types/index.ts';
+import { FaceOverlay } from './FaceOverlay.tsx';
 
 interface CameraViewProps {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -24,6 +25,8 @@ interface CameraViewProps {
 export function CameraView({
   videoRef,
   mirror,
+  showOverlay = true,
+  landmarks = [],
   devices,
   deviceId,
   closerHint,
@@ -37,7 +40,7 @@ export function CameraView({
 }: CameraViewProps) {
   return (
     <section className="flex min-w-0 flex-col gap-4" aria-label="Kamera">
-      {/* Kamera Ekranı: Tamamen temiz, hiçbir yazı, şekil veya katman içermez */}
+      {/* Kamera Ekranı: Yüz takip çizgileri/noktaları ile temiz video görüntüsü (Yazı veya karartıcı etiket içermez) */}
       <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-black shadow-2xl shadow-black/40 sm:aspect-video">
         <div
           className={mirror ? 'absolute inset-0 scale-x-[-1]' : 'absolute inset-0'}
@@ -52,6 +55,7 @@ export function CameraView({
             ref={videoRef}
             aria-label="Canlı kamera önizlemesi"
           />
+          <FaceOverlay landmarks={landmarks} visible={showOverlay} />
         </div>
       </div>
 
